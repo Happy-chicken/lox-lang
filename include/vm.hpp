@@ -1,6 +1,23 @@
+#include "./Environment.hpp"
 #include "./IRgenerator.hpp"
 #include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/IRBuilderFolder.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/Value.h>
 #include <memory>
+#include <vector>
+
+using Env = std::shared_ptr<Environment>;
+
+// Generic binary operator:
+#define GEN_BINARY_OP(Op, varName)                    \
+    do {                                              \
+        auto left = evaluate(expr->left);             \
+        auto right = evaluate(expr->right);           \
+        auto val = builder->Op(left, right, varName); \
+        return Object::make_llvmval_obj(val);         \
+    } while (false)
+
 class LoxVM : public Visitor<Object>,
               public Visitor_Stmt,
               public std::enable_shared_from_this<LoxVM> {
@@ -8,37 +25,56 @@ public:
     LoxVM() {
         moduleInit();
         setupExternalFunctions();
+        setupGlobalEnvironment();
     };
     ~LoxVM() = default;
+
+    class EnvironmentGuard {
+    public:
+        EnvironmentGuard(LoxVM &vm, Env env);
+
+        ~EnvironmentGuard();
+
+    private:
+        LoxVM &vm;
+        std::shared_ptr<Environment> previous_env;
+    };
 
     void exec(vector<shared_ptr<Stmt>> &statements);
 
 private:
     void compile(vector<shared_ptr<Stmt>> &statements);
     void saveModuleToFile(const std::string &fileName);
-    void moduleInit();                                                                         // init module and context
-    void setupExternalFunctions();                                                             // setup external functions
-    llvm::Function *createFunction(const std::string &fnName, llvm::FunctionType *fnType);     // create a function
-    llvm::Function *createFunctionProto(const std::string &fnName, llvm::FunctionType *fnType);// create a function prototype
-    llvm::GlobalVariable *createGlobalVariable(const std::string &name, llvm::Constant *init); // create a global variable
-    llvm::Value *gen(vector<shared_ptr<Stmt>> &statements);                                    // generate IR
-    llvm::BasicBlock *createBB(const std::string &name, llvm::Function *fn);                   // create a basic block
-    void createFunctionBlock(llvm::Function *fn);                                              // create a function block
+    void moduleInit();                                                                                  // init module and context
+    void setupExternalFunctions();                                                                      // setup external functions
+    void setupGlobalEnvironment();                                                                      // setup global environment
+    llvm::Function *createFunction(const std::string &fnName, llvm::FunctionType *fnType, Env env);     // create a function
+    llvm::Function *createFunctionProto(const std::string &fnName, llvm::FunctionType *fnType, Env env);// create a function prototype
+    llvm::Value *allocVar(const std::string &name, llvm::Type *type, Env env);                          // allocate a variable
+    llvm::GlobalVariable *createGlobalVariable(const std::string &name, llvm::Constant *init);          // create a global variable
+    llvm::Value *gen(vector<shared_ptr<Stmt>> &statements);                                             // generate IR
+    llvm::BasicBlock *createBB(const std::string &name, llvm::Function *fn);                            // create a basic block
+    void createFunctionBlock(llvm::Function *fn);                                                       // create a function block
+    llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);                                     // extract type from expression
 
-    llvm::Value *lastValue = nullptr;          // last value generated
-    llvm::Function *fn;                        // current compiling function
-    std::unique_ptr<llvm::LLVMContext> ctx;    // container for modules and other LLVM objects
-    std::unique_ptr<llvm::Module> module;      // container for functions and global variables
-    std::unique_ptr<llvm::IRBuilder<>> builder;// helps to generate IR
+
+    llvm::Value *lastValue = nullptr;              // last value generated
+    std::vector<llvm::Value *> Values;             // all IR values
+    Env globalEnv;                                 // global environment
+    Env &environment = globalEnv;                  // current env?
+    llvm::Function *fn;                            // current compiling function
+    std::unique_ptr<llvm::LLVMContext> ctx;        // container for modules and other LLVM objects
+    std::unique_ptr<llvm::Module> module;          // container for functions and global variables
+    std::unique_ptr<llvm::IRBuilder<>> varsBuilder;// this builder always prepends to the beginning of the function entry block
+    std::unique_ptr<llvm::IRBuilder<>> builder;    // enter at the end of the function entry block
 
     //runner functon
-    // Object evaluate(shared_ptr<Expr<Object>> expr);
-    void execute(shared_ptr<Stmt> stmt);
-    void executeBlock(vector<shared_ptr<Stmt>> statements /*environment*/);
 
     // generate IR for statements
     void codegenerate(vector<shared_ptr<Stmt>> &statements);
-    void codegenerate(shared_ptr<Stmt> stmt);
+
+    void executeBlock(vector<shared_ptr<Stmt>> statements, Env env);
+    void execute(shared_ptr<Stmt> stmt);
     llvm::Value *evaluate(shared_ptr<Expr<Object>> expr);
 
     // IR generator visitor

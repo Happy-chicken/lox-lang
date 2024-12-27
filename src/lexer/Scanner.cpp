@@ -214,17 +214,24 @@ void Scanner::String() {
 void Scanner::Number() {
     while (isDigit(peek()))
         advance();
-
+    bool isInteger = true;
     // Look for a fractional part.
     if (peek() == '.' && isDigit(peekNext())) {
         // Consume the "."
+        isInteger = false;
         advance();
         while (isDigit(peek()))
             advance();
     }
 
-    double num = stod(source.substr(start, current - start));
-    addToken(NUMBER, Object::make_obj(num));
+    std::string numStr = source.substr(start, current - start);
+    if (isInteger) {
+        int num = std::stoi(numStr);
+        addToken(INTEGEL, Object::make_obj(num));
+    } else {
+        double num = std::stod(numStr);
+        addToken(NUMBER, Object::make_obj(num));
+    }
 }
 
 void Scanner::identifier() {

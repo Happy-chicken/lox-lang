@@ -9,6 +9,7 @@
 #include "../../include/Logger.hpp"
 #include "../../include/Parser.hpp"
 #include "../../include/Stmt.hpp"
+#include "Token.hpp"
 
 using std::initializer_list;
 using std::runtime_error;
@@ -552,6 +553,11 @@ shared_ptr<Expr<Object>> Parser::primary() {
     if (match({NUMBER})) {
         return std::make_shared<Literal<Object>>(
             Object::make_obj(std::get<double>(previous().literal.data))
+        );
+    }
+    if (match({INTEGEL})) {
+        return std::make_shared<Literal<Object>>(
+            Object::make_obj(std::get<int>(previous().literal.data))
         );
     }
     if (match({STRING})) {

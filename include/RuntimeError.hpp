@@ -10,12 +10,14 @@ using std::string;
 
 class RuntimeError : public exception {
 public:
-  Token token;
-  string message;
-  RuntimeError(Token token_, string message_)
-      : token(token_), message(message_) {}
+    Token token;
+    string message;
+    RuntimeError(string message_)
+        : message(message_) {}
+    RuntimeError(Token token_, string message_)
+        : token(token_), message(message_) {}
 
-  virtual const char *what() const throw() { return message.c_str(); }
+    virtual const char *what() const throw() { return message.c_str(); }
 };
 
-#endif // RUNTIMEERROR_HPP_
+#endif// RUNTIMEERROR_HPP_

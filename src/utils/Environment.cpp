@@ -1,5 +1,6 @@
 
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -15,6 +16,12 @@ void Environment::define(string name, Object value) {
     values[name] = value;
 }
 
+// llvm environment
+llvm::Value *Environment::define(string name, llvm::Value *value) {
+    llvmRecord_[name] = value;
+    return value;
+}
+
 Object Environment::get(Token name) {
     if (values.find(name.lexeme) != values.end()) {
         return values.at(name.lexeme);
@@ -27,6 +34,10 @@ Object Environment::get(Token name) {
 
 Object Environment::getAt(int distance, string name) {
     return ancestor(distance)->values[name];
+}
+
+llvm::Value *Environment::lookup(const string &name) {
+    return resolve(name)->llvmRecord_[name];
 }
 
 void Environment::assign(Token name, Object value) {

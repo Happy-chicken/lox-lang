@@ -129,6 +129,8 @@ bool Interpreter::isEqual(Object a, Object b) {
                 return std::get<bool>(a.data) == std::get<bool>(b.data);
             case 3:
                 return true;
+            case 8:
+                return std::get<int>(a.data) == std::get<int>(b.data);
             default:
                 return false;
         }
@@ -166,6 +168,8 @@ Object Interpreter::visitLiteralExpr(shared_ptr<Literal<Object>> expr) {
             return Object::make_obj(std::get<bool>(expr->value.data));
         case 3:
             return Object::make_nil_obj();
+        case 8:
+            return Object::make_obj(std::get<int>(expr->value.data));
 
         default:
             return Object::make_obj(std::get<std::string>(expr->value.data));

@@ -54,6 +54,12 @@ std::string stringify(const Object &item, std::stringstream &stream) {
         num_as_string.erase(num_as_string.find_last_not_of('.') + 1, std::string::npos);
         return num_as_string;
     }
+    // integel
+    if (std::holds_alternative<int>(item.data)) {
+        int i32num = std::get<int>(item.data);
+        auto i32num_as_string = std::to_string(std::move(i32num));
+        return i32num_as_string;
+    }
     // item.type == Object::Object_type::Object_fun
     if (item.data.index() == 5)
         return std::get<shared_ptr<LoxCallable>>(item.data)->toString();

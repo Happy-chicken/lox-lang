@@ -14,7 +14,7 @@ class LoxInstance;
 class ListInstance;
 class LoxList;
 //monostate non-valid state in variant in c++17
-using Objects = std::variant<std::string, double, bool, std::monostate, shared_ptr<LoxList>, shared_ptr<LoxCallable>, shared_ptr<LoxInstance>, shared_ptr<LoxClass>>;
+using Objects = std::variant<std::string, double, bool, std::monostate, shared_ptr<LoxList>, shared_ptr<LoxCallable>, shared_ptr<LoxInstance>, shared_ptr<LoxClass>, int>;
 class Object {
 public:
     Objects data;
