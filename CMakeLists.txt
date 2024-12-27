@@ -32,6 +32,7 @@ add_executable(main main.cpp lox.cpp vm.cpp ${SRC})
 
 llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
 target_link_libraries(main logger lexer parser interpreter ${LLVM_LIBS})
+target_compile_options(main PRIVATE -fstandalone-debug)
 
 
 

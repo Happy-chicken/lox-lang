@@ -140,16 +140,16 @@ bool Interpreter::isEqual(Object a, Object b) {
 }
 
 void Interpreter::checkNumberOperand(Token operation, Object operand) {
-    if (operand.data.index() == 1)// operand.type == Object::Object_num
+    if (operand.data.index() == 1 || operand.data.index() == 8)// operand.type == Object::Object_num
         return;
     throw RuntimeError(operation, "Runtime Error. Operand must be a number.");
 }
 
 void Interpreter::checkNumberOperands(Token operation, Object left, Object right) {
     // left.type == Object::Object_num && right.type == Object::Object_num
-    if (left.data.index() == 1 && right.data.index() == 1)
+    if ((left.data.index() == 1 && right.data.index() == 1) || (left.data.index() == 8 && right.data.index() == 8))
         return;
-    throw RuntimeError(operation, "Runtime Error. Operand must be a number.");
+    throw RuntimeError(operation, "Runtime Error. Operands must be a number.");
 }
 
 Object Interpreter::lookUpVariable(Token name, shared_ptr<Expr<Object>> expr) {
@@ -199,33 +199,47 @@ Object Interpreter::visitBinaryExpr(shared_ptr<Binary<Object>> expr) {
     bool result_bool = false;
     string result_str = "";
     double result_num = 0;
+    int result_i32num = 0;
+    bool intflag = left.data.index() == 8 || right.data.index() == 8;
     // Object foo;
     switch (expr->operation.type) {
         case GREATER:
             checkNumberOperands(expr->operation, left, right);
-            result_bool = std::get<double>(left.data) > std::get<double>(right.data);
+            result_bool = intflag ? std::get<int>(left.data) > std::get<int>(right.data) : std::get<double>(left.data) > std::get<double>(right.data);
             return Object::make_obj(result_bool);
         case GREATER_EQUAL:
             checkNumberOperands(expr->operation, left, right);
-            result_bool = std::get<double>(left.data) >= std::get<double>(right.data);
+            result_bool = intflag ? std::get<int>(left.data) >= std::get<int>(right.data) : std::get<double>(left.data) >= std::get<double>(right.data);
             return Object::make_obj(result_bool);
         case LESS:
             checkNumberOperands(expr->operation, left, right);
-            result_bool = std::get<double>(left.data) < std::get<double>(right.data);
+            result_bool = intflag ? std::get<int>(left.data) < std::get<int>(right.data) : std::get<double>(left.data) < std::get<double>(right.data);
             return Object::make_obj(result_bool);
         case LESS_EQUAL:
             checkNumberOperands(expr->operation, left, right);
-            result_bool = std::get<double>(left.data) <= std::get<double>(right.data);
+            result_bool = intflag ? std::get<int>(left.data) <= std::get<int>(right.data) : std::get<double>(left.data) <= std::get<double>(right.data);
             return Object::make_obj(result_bool);
         case MINUS:
             checkNumberOperand(expr->operation, right);
-            result_num = std::get<double>(left.data) - std::get<double>(right.data);
-            return Object::make_obj(result_num);
+            if (left.data.index() == 1 && right.data.index() == 1) {
+                result_num = std::get<double>(left.data) - std::get<double>(right.data);
+                return Object::make_obj(result_num);
+            }
+            // int
+            if (left.data.index() == 8 && right.data.index() == 8) {
+                result_i32num = std::get<int>(left.data) - std::get<int>(right.data);
+                return Object::make_obj(result_i32num);
+            }
         case PLUS:
             // left.type == Object::Object_num && right.type == Object::Object_num
             if (left.data.index() == 1 && right.data.index() == 1) {
                 result_num = std::get<double>(left.data) + std::get<double>(right.data);
                 return Object::make_obj(result_num);
+            }
+            // int
+            if (left.data.index() == 8 && right.data.index() == 8) {
+                result_i32num = std::get<int>(left.data) + std::get<int>(right.data);
+                return Object::make_obj(result_i32num);
             }
             // left.type == Object::Object_str && right.type == Object::Object_str
             if (left.data.index() == 0 && right.data.index() == 0) {
@@ -587,6 +601,7 @@ void Interpreter::visitWhileStmt(const While &stmt) {
 }
 
 void Interpreter::visitIfStmt(const If &stmt) {
+    // ! it cannot interprete nested if-else expression
     if (isTruthy(evaluate(stmt.main_branch.condition))) {
         execute(stmt.main_branch.statement);
     }

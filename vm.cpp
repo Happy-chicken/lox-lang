@@ -44,20 +44,26 @@ llvm::Value *LoxVM::gen(vector<shared_ptr<Stmt>> &statements) {
     // generate IR based on the AST (using visitor pattern)
     for (auto stmt: statements) {
         execute(stmt);
-        switch (stmt->type) {
-            case StmtType::Expression: {
-                // execute(stmt);
-                return builder->CreateRet(lastValue);
-            }
-            case StmtType::Print: {
-                return lastValue;
-            }
-            case StmtType::Var: {
-                return lastValue;
-            }
-        }
+        // switch (stmt->type) {
+        //     case StmtType::Expression: {
+        //         // execute(stmt);
+        //         return builder->CreateRet(lastValue);
+        //     }
+        //     case StmtType::Print: {
+        //         return lastValue;
+        //     }
+        //     case StmtType::Var: {
+        //         return lastValue;
+        //     }
+        //     case StmtType::If: {
+        //         return lastValue;
+        //     }
+        //     case StmtType::While: {
+        //         return lastValue;
+        //     }
+        // }
     }
-    return builder->getInt32(0);
+    return lastValue;
 }
 
 void LoxVM::moduleInit() {
@@ -65,6 +71,7 @@ void LoxVM::moduleInit() {
     module = std::make_unique<llvm::Module>("lox", *ctx);
     builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
     varsBuilder = std::make_unique<llvm::IRBuilder<>>(*ctx);
+    lastValue = builder->getInt32(0);
 }
 
 llvm::Function *LoxVM::createFunction(const std::string &fnName, llvm::FunctionType *fnType, Env env) {
@@ -154,7 +161,6 @@ llvm::Type *LoxVM::excrateVarType(std::shared_ptr<Expr<Object>> expr) {
 }
 
 void LoxVM::executeBlock(vector<shared_ptr<Stmt>> statements, Env env) {
-    // ! have problem here
     EnvironmentGuard env_guard{*this, env};
     for (auto stmt: statements) {
         execute(stmt);
@@ -214,8 +220,8 @@ Object LoxVM::visitAssignExpr(shared_ptr<Assign<Object>> expr) {
     // variable
     auto varBinding = this->environment->lookup(varName);
 
-    auto var = builder->CreateStore(value, varBinding);
-    return Object::make_llvmval_obj(var);
+    builder->CreateStore(value, varBinding);
+    return Object::make_llvmval_obj(value);
 }
 
 Object LoxVM::visitBinaryExpr(shared_ptr<Binary<Object>> expr) {
@@ -257,7 +263,7 @@ Object LoxVM::visitUnaryExpr(shared_ptr<Unary<Object>> expr) {
 Object LoxVM::visitVariableExpr(shared_ptr<Variable<Object>> expr) {
     // use the declared variable
     string varName = expr->name.lexeme;
-    auto value = globalEnv->lookup(varName);
+    auto value = environment->lookup(varName);
     //local variable
     if (auto localVar = llvm::dyn_cast<llvm::AllocaInst>(value)) {
         auto var = builder->CreateLoad(localVar->getAllocatedType(), localVar, varName.c_str());
@@ -269,7 +275,7 @@ Object LoxVM::visitVariableExpr(shared_ptr<Variable<Object>> expr) {
         auto var = builder->CreateLoad(globalVar->getInitializer()->getType(), globalVar, varName.c_str());
         return Object::make_llvmval_obj(var);
     }
-
+    return Object::make_llvmval_obj(builder->getInt32(0));
     // auto globalVar = module->getNamedGlobal(varName)->getInitializer();
 }
 
@@ -356,8 +362,81 @@ void LoxVM::visitBlockStmt(const Block &stmt) {
 
 void LoxVM::visitClassStmt(const Class &stmt) {}
 void LoxVM::visitIfStmt(const If &stmt) {
+    auto conditon = evaluate(stmt.main_branch.condition);
+
+    auto thenBlock = createBB("then", fn);
+    // else, if-end block to handle nested if expression
+    auto elseBlock = createBB("else");
+    auto ifEndBlock = createBB("ifend");
+
+    // conditon branch
+    builder->CreateCondBr(conditon, thenBlock, elseBlock);
+    // then branch
+    builder->SetInsertPoint(thenBlock);
+    execute(stmt.main_branch.statement);
+    auto thenRes = lastValue;
+    builder->CreateBr(ifEndBlock);
+    // restore block to handle nested if expression
+    // which is needed for phi instruction
+    thenBlock = builder->GetInsertBlock();
+    // else branch
+    // append block to function
+    elseBlock->insertInto(fn);// in llvm 17
+    // fn->getBasicBlockList().push_back(elseBlock); in llvm 14
+    builder->SetInsertPoint(elseBlock);
+    llvm::Value *elseRes = lastValue;
+    if (stmt.else_branch != nullptr) {
+        execute(stmt.else_branch);
+        elseRes = lastValue;
+    } else {
+        // If there's no else block, create a branch from elseBlock to ifEndBlock directly
+        // and set the default elseRes value.
+        elseRes = builder->getInt32(0);// Set default value for elseRes
+    }
+
+    builder->CreateBr(ifEndBlock);
+    // same for else block
+    elseBlock = builder->GetInsertBlock();
+    // endif
+    ifEndBlock->insertInto(fn);
+    // fn->getBasicBlockList().push_back(ifEndBlock);
+    builder->SetInsertPoint(ifEndBlock);
+
+    // result of if expression is phi
+    auto phi = builder->CreatePHI(thenRes->getType(), 2, "tmpif");
+    phi->addIncoming(thenRes, thenBlock);
+    phi->addIncoming(elseRes, elseBlock);
+    lastValue = phi;
 }
-void LoxVM::visitWhileStmt(const While &stmt) {}
+void LoxVM::visitWhileStmt(const While &stmt) {
+    // condition
+    auto condBlock = createBB("cond", fn);
+    builder->CreateBr(condBlock);
+
+    // Body:while end loop
+    auto bodyBlock = createBB("body");
+    auto loopEndBlock = createBB("loopend");
+
+    // compile while
+    builder->SetInsertPoint(condBlock);
+    auto condition = evaluate(stmt.condition);
+
+    // condition branch
+    builder->CreateCondBr(condition, bodyBlock, loopEndBlock);
+
+    // body
+    bodyBlock->insertInto(fn);
+    builder->SetInsertPoint(bodyBlock);
+    execute(stmt.body);
+
+    // jump to condition block unconditionally
+    builder->CreateBr(condBlock);
+
+    // end while
+    loopEndBlock->insertInto(fn);
+    builder->SetInsertPoint(loopEndBlock);
+    lastValue = builder->getInt32(0);
+}
 void LoxVM::visitFunctionStmt(shared_ptr<Function> stmt) {}
 void LoxVM::visitReturnStmt(const Return &stmt) {}
 void LoxVM::visitBreakStmt(const Break &stmt) {}
