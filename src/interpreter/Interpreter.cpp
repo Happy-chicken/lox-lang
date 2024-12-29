@@ -226,7 +226,7 @@ Object Interpreter::visitBinaryExpr(shared_ptr<Binary<Object>> expr) {
                 return Object::make_obj(result_num);
             }
             // int
-            if (left.data.index() == 8 && right.data.index() == 8) {
+            else if (left.data.index() == 8 && right.data.index() == 8) {
                 result_i32num = std::get<int>(left.data) - std::get<int>(right.data);
                 return Object::make_obj(result_i32num);
             }
@@ -237,7 +237,7 @@ Object Interpreter::visitBinaryExpr(shared_ptr<Binary<Object>> expr) {
                 return Object::make_obj(result_num);
             }
             // int
-            if (left.data.index() == 8 && right.data.index() == 8) {
+            else if (left.data.index() == 8 && right.data.index() == 8) {
                 result_i32num = std::get<int>(left.data) + std::get<int>(right.data);
                 return Object::make_obj(result_i32num);
             }
@@ -251,13 +251,27 @@ Object Interpreter::visitBinaryExpr(shared_ptr<Binary<Object>> expr) {
                 "Runtime Error. Operands must be two numbers or two strings."
             );
         case SLASH:
-            checkNumberOperands(expr->operation, left, right);
-            result_num = std::get<double>(left.data) / std::get<double>(right.data);
-            return Object::make_obj(result_num);
+            checkNumberOperand(expr->operation, right);
+            if (left.data.index() == 1 && right.data.index() == 1) {
+                result_num = std::get<double>(left.data) / std::get<double>(right.data);
+                return Object::make_obj(result_num);
+            }
+            // int
+            else if (left.data.index() == 8 && right.data.index() == 8) {
+                result_i32num = std::get<int>(left.data) / std::get<int>(right.data);
+                return Object::make_obj(result_i32num);
+            }
         case STAR:
-            checkNumberOperands(expr->operation, left, right);
-            result_num = std::get<double>(left.data) * std::get<double>(right.data);
-            return Object::make_obj(result_num);
+            checkNumberOperand(expr->operation, right);
+            if (left.data.index() == 1 && right.data.index() == 1) {
+                result_num = std::get<double>(left.data) * std::get<double>(right.data);
+                return Object::make_obj(result_num);
+            }
+            // int
+            else if (left.data.index() == 8 && right.data.index() == 8) {
+                result_i32num = std::get<int>(left.data) * std::get<int>(right.data);
+                return Object::make_obj(result_i32num);
+            }
         case BANG_EQUAL:
             return Object::make_obj(!isEqual(left, right));
         case EQUAL_EQUAL:

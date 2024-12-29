@@ -1,7 +1,9 @@
 #include "./include/vm.hpp"
+#include "Environment.hpp"
 #include "Expr.hpp"
 #include "Stmt.hpp"
 #include <llvm/IR/Constant.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Instructions.h>
@@ -13,13 +15,12 @@
 #include <memory>
 #include <regex>
 #include <string>
+
+llvm::Value *LoxVM::lastValue = nullptr;
 void LoxVM::exec(vector<shared_ptr<Stmt>> &statements) {
-
-
-    // compile ast
-    // compile(ast)
+    // 1. compile ast
     compile(statements);
-
+    // 2. print llvm IR
     module->print(llvm::outs(), nullptr);
     // 3. save module to file
     saveModuleToFile("./output.ll");
@@ -44,26 +45,8 @@ llvm::Value *LoxVM::gen(vector<shared_ptr<Stmt>> &statements) {
     // generate IR based on the AST (using visitor pattern)
     for (auto stmt: statements) {
         execute(stmt);
-        // switch (stmt->type) {
-        //     case StmtType::Expression: {
-        //         // execute(stmt);
-        //         return builder->CreateRet(lastValue);
-        //     }
-        //     case StmtType::Print: {
-        //         return lastValue;
-        //     }
-        //     case StmtType::Var: {
-        //         return lastValue;
-        //     }
-        //     case StmtType::If: {
-        //         return lastValue;
-        //     }
-        //     case StmtType::While: {
-        //         return lastValue;
-        //     }
-        // }
     }
-    return lastValue;
+    return LoxVM::lastValue;
 }
 
 void LoxVM::moduleInit() {
@@ -71,7 +54,7 @@ void LoxVM::moduleInit() {
     module = std::make_unique<llvm::Module>("lox", *ctx);
     builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
     varsBuilder = std::make_unique<llvm::IRBuilder<>>(*ctx);
-    lastValue = builder->getInt32(0);
+    LoxVM::lastValue = builder->getInt32(0);
 }
 
 llvm::Function *LoxVM::createFunction(const std::string &fnName, llvm::FunctionType *fnType, Env env) {
@@ -159,6 +142,27 @@ llvm::Type *LoxVM::excrateVarType(std::shared_ptr<Expr<Object>> expr) {
     }
     return builder->getInt32Ty();
 }
+
+bool LoxVM::hasReturnType(shared_ptr<Stmt> stmt) {
+    // if
+    // return fnExp.list[3].type == ExpType::SYMBOL && fnExp.list[3].string == "->";
+    return false;
+}
+
+llvm::FunctionType *LoxVM::excrateFunType(shared_ptr<Function> stmt) {
+    auto params = stmt->params;
+    // auto returnType = hasReturnType(fnExp) ? getTypeFromString(fnExp.list[4].string) : builder->getInt32Ty();
+    auto returnType = builder->getInt32Ty();
+    std::vector<llvm::Type *> paramTypes{};
+    for (auto &param: params) {
+        // auto paramType = excrateVarType(param);
+        auto paramType = builder->getInt32Ty();
+        paramTypes.push_back(paramType);
+    }
+    return llvm::FunctionType::get(returnType, paramTypes, false);
+    return llvm::FunctionType::get(returnType, paramTypes, false);
+}
+
 
 void LoxVM::executeBlock(vector<shared_ptr<Stmt>> statements, Env env) {
     EnvironmentGuard env_guard{*this, env};
@@ -274,9 +278,10 @@ Object LoxVM::visitVariableExpr(shared_ptr<Variable<Object>> expr) {
     else if (auto globalVar = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
         auto var = builder->CreateLoad(globalVar->getInitializer()->getType(), globalVar, varName.c_str());
         return Object::make_llvmval_obj(var);
+    } else {
+        return Object::make_llvmval_obj(value);
     }
-    return Object::make_llvmval_obj(builder->getInt32(0));
-    // auto globalVar = module->getNamedGlobal(varName)->getInitializer();
+    // return Object::make_llvmval_obj(builder->getInt32(0));
 }
 
 Object LoxVM::visitLogicalExpr(shared_ptr<Logical<Object>> expr) {
@@ -300,7 +305,15 @@ Object LoxVM::visitSubscriptExpr(shared_ptr<Subscript<Object>> expr) {
 }
 
 Object LoxVM::visitCallExpr(shared_ptr<Call<Object>> expr) {
-    return Object::make_llvmval_obj(builder->getInt32(0));
+    auto callable = evaluate(expr->callee);
+    std::vector<llvm::Value *> args{};
+    for (auto arg: expr->arguments) {
+        args.push_back(evaluate(arg));
+    }
+
+    auto fn = (llvm::Function *) callable;
+    auto val = builder->CreateCall(fn, args);
+    return Object::make_llvmval_obj(val);
 }
 
 Object LoxVM::visitGetExpr(shared_ptr<Get<Object>> expr) {
@@ -342,10 +355,10 @@ void LoxVM::visitVarStmt(const Var &stmt) {
     auto varName = stmt.name.lexeme;
     if (stmt.initializer != nullptr) {
         // auto varNameDecl = stmt.initializer;
-        auto env = globalEnv;
+        // auto env = globalEnv;
         auto init = evaluate(stmt.initializer);
         auto varTy = excrateVarType(stmt.initializer);
-        auto varBinding = allocVar(varName, varTy, env);
+        auto varBinding = allocVar(varName, varTy, environment);
         lastValue = builder->CreateStore(init, varBinding);
         // lastValue = createGlobalVariable(varName, (llvm::Constant *) init)->getInitializer();
     } else {
@@ -356,7 +369,7 @@ void LoxVM::visitVarStmt(const Var &stmt) {
 }
 
 void LoxVM::visitBlockStmt(const Block &stmt) {
-    shared_ptr<Environment> env = std::make_shared<Environment>(globalEnv, std::map<std::string, llvm::Value *>{});
+    shared_ptr<Environment> env = std::make_shared<Environment>(environment, std::map<std::string, llvm::Value *>{});
     executeBlock(stmt.statements, env);
 }
 
@@ -437,9 +450,52 @@ void LoxVM::visitWhileStmt(const While &stmt) {
     builder->SetInsertPoint(loopEndBlock);
     lastValue = builder->getInt32(0);
 }
-void LoxVM::visitFunctionStmt(shared_ptr<Function> stmt) {}
-void LoxVM::visitReturnStmt(const Return &stmt) {}
+
+void LoxVM::visitFunctionStmt(shared_ptr<Function> stmt) {
+    auto fnName = stmt->name.lexeme;
+    auto params = stmt->params;
+    auto funBody = stmt->body;
+
+    // save current function
+    auto prevFn = fn;
+    auto prevBlock = builder->GetInsertBlock();
+    auto prevEnv = environment;
+    // override fn to compile body
+    auto newFn = createFunction(fnName, excrateFunType(stmt), environment);
+    fn = newFn;
+
+    // set parameter name
+    auto idx = 0;
+    environment = std::make_shared<Environment>(environment, std::map<std::string, llvm::Value *>{});
+
+    for (auto &arg: fn->args()) {
+        auto param = params[idx++];
+        auto argName = param.lexeme;
+
+        arg.setName(argName);
+
+        // allocate a local variable prr argument to make sure arguments mutable
+        auto argBinding = allocVar(argName, arg.getType(), environment);
+        builder->CreateStore(&arg, argBinding);
+    }
+
+    gen(funBody);
+    // builder->CreateRet(lastValue);
+
+    // restore previous env after compiling
+    builder->SetInsertPoint(prevBlock);
+    fn = prevFn;
+    environment = prevEnv;
+    lastValue = newFn;
+}
+
+void LoxVM::visitReturnStmt(const Return &stmt) {
+    auto returnVal = evaluate(stmt.value);
+    builder->CreateRet(returnVal);
+}
+
 void LoxVM::visitBreakStmt(const Break &stmt) {}
+
 void LoxVM::visitContinueStmt(const Continue &stmt) {}
 
 LoxVM::EnvironmentGuard::EnvironmentGuard(

@@ -56,12 +56,14 @@ private:
     llvm::BasicBlock *createBB(const std::string &name, llvm::Function *fn);                            // create a basic block
     void createFunctionBlock(llvm::Function *fn);                                                       // create a function block
     llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);                                     // extract type from expression
+    bool hasReturnType(shared_ptr<Stmt> stmt);
+    llvm::FunctionType *excrateFunType(shared_ptr<Function> stmt);
 
 
-    llvm::Value *lastValue = nullptr;              // last value generated
+    static llvm::Value *lastValue;                 // last value generated
     std::vector<llvm::Value *> Values;             // all IR values
     Env globalEnv;                                 // global environment
-    Env &environment = globalEnv;                  // current env?
+    Env &environment = globalEnv;                  // current env
     llvm::Function *fn;                            // current compiling function
     std::unique_ptr<llvm::LLVMContext> ctx;        // container for modules and other LLVM objects
     std::unique_ptr<llvm::Module> module;          // container for functions and global variables
