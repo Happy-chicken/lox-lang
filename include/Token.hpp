@@ -33,6 +33,7 @@ typedef enum {
     LESS_EQUAL,
     MINUS_MINUS,
     PLUS_PLUS,
+    ARROW,
 
     // Literals.
     IDENTIFIER,

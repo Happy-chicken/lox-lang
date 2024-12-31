@@ -4,16 +4,17 @@
 #include "../../include/Stmt.hpp"
 #include <iostream>
 #include <memory>
+#include <string>
 
 // ------------------------------------------------------------------------------------------
 ListClass::ListClass() : LoxClass("list", nullptr, {}) {
     this->methods["len"] = std::make_shared<ListLenMethods>(
         std::make_shared<Environment>(),
-        std::make_shared<Function>(Token(), vector<Token>{}, vector<shared_ptr<Stmt>>{})
+        std::make_shared<Function>(Token(), vector<std::pair<Token, string>>{}, vector<shared_ptr<Stmt>>{}, Token())
     );
     this->methods["append"] = std::make_shared<ListAppendMethods>(
         std::make_shared<Environment>(),
-        std::make_shared<Function>(Token(), vector<Token>{Token()}, vector<shared_ptr<Stmt>>{})
+        std::make_shared<Function>(Token(), vector<std::pair<Token, string>>{{Token(), ""}}, vector<shared_ptr<Stmt>>{}, Token())
     );
 }
 

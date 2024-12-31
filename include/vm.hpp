@@ -56,6 +56,7 @@ private:
     llvm::BasicBlock *createBB(const std::string &name, llvm::Function *fn);                            // create a basic block
     void createFunctionBlock(llvm::Function *fn);                                                       // create a function block
     llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);                                     // extract type from expression
+    llvm::Type *excrateVarType(const string &typeName);                                                 // extract type from string
     bool hasReturnType(shared_ptr<Stmt> stmt);
     llvm::FunctionType *excrateFunType(shared_ptr<Function> stmt);
 

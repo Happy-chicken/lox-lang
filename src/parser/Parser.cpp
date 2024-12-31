@@ -1,8 +1,10 @@
+#include <climits>
 #include <initializer_list>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../../include/Expr.hpp"
@@ -57,10 +59,14 @@ shared_ptr<Stmt> Parser::declaration() {
 /// @return var Stmt Node, one parsed data
 shared_ptr<Stmt> Parser::varDeclaration() {
     Token identifier = consume(IDENTIFIER, "Syntax Error. Expect variable name.");
+    string typeName("");
+    if (match({COLON})) {
+        typeName = consume(IDENTIFIER, "Syntax Error. Expect variable type.").lexeme;
+    }
     shared_ptr<Expr<Object>> initializer =
         match({EQUAL}) ? expression() : nullptr;
     consume(SEMICOLON, "Syntax Error. Expect ';' after variable declaration.");
-    shared_ptr<Stmt> var = std::make_shared<Var>(identifier, initializer);
+    shared_ptr<Stmt> var = std::make_shared<Var>(identifier, initializer, typeName);
     return var;
 }
 
@@ -71,19 +77,29 @@ shared_ptr<Function> Parser::function(string kind) {
     Token identifier =
         consume(IDENTIFIER, "Syntax Error. Expect " + kind + " name.");
     consume(LEFT_PAREN, "Syntax Error. Expect '(' after " + kind + " name.");
-    vector<Token> parameters;
+    vector<std::pair<Token, string>> parameters;
+    // handle the parameters like (a, b) or (a:int, b:int)
     if (!check(RIGHT_PAREN)) {
         do {
             if (parameters.size() >= 255) {
                 error(peek(), "Syntax Error. Cannot have more than 255 parameters.");
             }
-            parameters.emplace_back(consume(IDENTIFIER, "Expect parameter name."));
+            Token name = consume(IDENTIFIER, "Expect parameter name.");
+            string typeName("");
+            if (match({COLON})) {
+                typeName = consume(IDENTIFIER, "Expect parameter type.").lexeme;
+            }
+            parameters.emplace_back(name, typeName);
         } while (match({COMMA}));
     }
     consume(RIGHT_PAREN, "Syntax Error. Expect ')' after parameters.");
+    Token returnType;
+    if (match({ARROW})) {
+        returnType = consume(IDENTIFIER, "Expect function return value type.");
+    }
     consume(LEFT_BRACE, "Syntax Error. Expect '{' before " + kind + " body.");
     auto body = block();
-    auto func = std::make_shared<Function>(identifier, parameters, body);
+    auto func = std::make_shared<Function>(identifier, parameters, body, returnType);
     return func;
 }
 

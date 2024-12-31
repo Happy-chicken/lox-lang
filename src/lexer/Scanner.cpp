@@ -113,11 +113,21 @@ void Scanner::scanToken() {
         case '.':
             addToken(DOT);
             break;
-        case '-':
-            addToken(match('-') ? MINUS_MINUS : MINUS);
+        case '-': {
+            if (match('>')) {
+                addToken(ARROW);
+            } else if (match('-')) {
+                addToken(MINUS_MINUS);
+            } else {
+                addToken(MINUS);
+            }
             break;
+        }
         case '+':
             addToken(match('+') ? PLUS_PLUS : PLUS);
+            break;
+        case ':':
+            addToken(COLON);
             break;
         case ';':
             addToken(SEMICOLON);

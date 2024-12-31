@@ -2,6 +2,7 @@
 #include "Environment.hpp"
 #include "Expr.hpp"
 #include "Stmt.hpp"
+#include "Token.hpp"
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
@@ -143,6 +144,16 @@ llvm::Type *LoxVM::excrateVarType(std::shared_ptr<Expr<Object>> expr) {
     return builder->getInt32Ty();
 }
 
+llvm::Type *LoxVM::excrateVarType(const string &typeName) {
+
+    if (typeName == "int") {
+        return builder->getInt32Ty();
+    } else if (typeName == "str") {
+        return builder->getInt8PtrTy()->getPointerTo();
+    }
+    return builder->getInt32Ty();
+}
+
 bool LoxVM::hasReturnType(shared_ptr<Stmt> stmt) {
     // if
     // return fnExp.list[3].type == ExpType::SYMBOL && fnExp.list[3].string == "->";
@@ -151,16 +162,17 @@ bool LoxVM::hasReturnType(shared_ptr<Stmt> stmt) {
 
 llvm::FunctionType *LoxVM::excrateFunType(shared_ptr<Function> stmt) {
     auto params = stmt->params;
-    // auto returnType = hasReturnType(fnExp) ? getTypeFromString(fnExp.list[4].string) : builder->getInt32Ty();
-    auto returnType = builder->getInt32Ty();
+    auto returnType = stmt->returnTypeName.type == NIL ? builder->getInt32Ty()
+                                                       : excrateVarType(stmt->returnTypeName.lexeme);
+    // auto returnType = builder->getInt32Ty();
     std::vector<llvm::Type *> paramTypes{};
     for (auto &param: params) {
-        // auto paramType = excrateVarType(param);
-        auto paramType = builder->getInt32Ty();
+        auto paramType = excrateVarType(param.second);
+        // auto paramType = builder->getInt32Ty();
         paramTypes.push_back(paramType);
     }
     return llvm::FunctionType::get(returnType, paramTypes, false);
-    return llvm::FunctionType::get(returnType, paramTypes, false);
+    // return llvm::FunctionType::get(returnType, paramTypes, false);
 }
 
 
@@ -357,7 +369,7 @@ void LoxVM::visitVarStmt(const Var &stmt) {
         // auto varNameDecl = stmt.initializer;
         // auto env = globalEnv;
         auto init = evaluate(stmt.initializer);
-        auto varTy = excrateVarType(stmt.initializer);
+        auto varTy = excrateVarType(stmt.typeName);
         auto varBinding = allocVar(varName, varTy, environment);
         lastValue = builder->CreateStore(init, varBinding);
         // lastValue = createGlobalVariable(varName, (llvm::Constant *) init)->getInitializer();
@@ -452,7 +464,7 @@ void LoxVM::visitWhileStmt(const While &stmt) {
 }
 
 void LoxVM::visitFunctionStmt(shared_ptr<Function> stmt) {
-    auto fnName = stmt->name.lexeme;
+    auto fnName = stmt->functionName.lexeme;
     auto params = stmt->params;
     auto funBody = stmt->body;
 
@@ -470,8 +482,7 @@ void LoxVM::visitFunctionStmt(shared_ptr<Function> stmt) {
 
     for (auto &arg: fn->args()) {
         auto param = params[idx++];
-        auto argName = param.lexeme;
-
+        auto argName = param.first.lexeme;
         arg.setName(argName);
 
         // allocate a local variable prr argument to make sure arguments mutable

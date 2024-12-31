@@ -575,11 +575,11 @@ void Interpreter::visitClassStmt(const Class &stmt) {
 
     map<string, shared_ptr<LoxFunction>> methods;
     for (auto method: stmt.methods) {
-        bool is_init = method->name.lexeme == "init";
+        bool is_init = method->functionName.lexeme == "init";
         shared_ptr<LoxFunction> function =
             std::make_shared<LoxFunction>(method, environment, is_init);
 
-        methods[method->name.lexeme] = function;
+        methods[method->functionName.lexeme] = function;
     }
 
     auto klass = std::make_shared<LoxClass>(
@@ -633,7 +633,7 @@ void Interpreter::visitFunctionStmt(shared_ptr<Function> stmt) {
     shared_ptr<LoxFunction> function =
         std::make_shared<LoxFunction>(stmt, environment, false);
     Object obj = Object::make_obj(function);
-    environment->define(stmt->name.lexeme, obj);
+    environment->define(stmt->functionName.lexeme, obj);
 }
 
 // The EnvironmentGuard class is used to manage the interpreter's environment

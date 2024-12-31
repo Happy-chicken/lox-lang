@@ -7,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 using std::cout;
@@ -76,13 +77,14 @@ public:
 
 class Var : public Stmt {
 public:
-    explicit Var(Token name_, shared_ptr<Expr<Object>> initializer_)
-        : initializer(initializer_), name(name_) { type = StmtType::Var; }
+    explicit Var(Token name_, shared_ptr<Expr<Object>> initializer_, string typeName_)
+        : initializer(initializer_), name(name_), typeName(typeName_) { type = StmtType::Var; }
     void accept(shared_ptr<Visitor_Stmt> visitor) override {
         visitor->visitVarStmt(*this);
     }
     shared_ptr<Expr<Object>> initializer;
     Token name;
+    string typeName;
 };
 
 class Block : public Stmt {
@@ -133,14 +135,15 @@ public:
 
 class Function : public Stmt, public std::enable_shared_from_this<Function> {
 public:
-    Function(Token name_, vector<Token> params_, vector<shared_ptr<Stmt>> body_)
-        : name(name_), params(params_), body(body_) { type = StmtType::Function; }
+    Function(Token name_, vector<std::pair<Token, string>> params_, vector<shared_ptr<Stmt>> body_, Token returnTypeName_)
+        : functionName(name_), params(params_), body(body_), returnTypeName(returnTypeName_) { type = StmtType::Function; }
     void accept(shared_ptr<Visitor_Stmt> visitor) override {
         visitor->visitFunctionStmt(this->shared_from_this());
     }
-    Token name;
-    vector<Token> params;
+    Token functionName;
+    vector<std::pair<Token, string>> params;
     vector<shared_ptr<Stmt>> body;
+    Token returnTypeName;
 };
 
 class Print : public Stmt {
