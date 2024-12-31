@@ -150,14 +150,65 @@ llvm::Type *LoxVM::excrateVarType(const string &typeName) {
         return builder->getInt32Ty();
     } else if (typeName == "str") {
         return builder->getInt8PtrTy()->getPointerTo();
+    } else if (typeName == "") {
+        return builder->getInt32Ty();
     }
-    return builder->getInt32Ty();
+    return classMap_[typeName].cls->getPointerTo();
 }
 
 bool LoxVM::hasReturnType(shared_ptr<Stmt> stmt) {
     // if
     // return fnExp.list[3].type == ExpType::SYMBOL && fnExp.list[3].string == "->";
     return false;
+}
+
+// realted to class helper function
+llvm::StructType *LoxVM::getClassByName(const std::string &name) {
+    return llvm::StructType::getTypeByName(*ctx, name);
+}
+
+void LoxVM::inheritClass(llvm::StructType *cls, llvm::StructType *parent) {}
+
+void LoxVM::buildClassInfo(llvm::StructType *cls, const Class &stmt, Env env) {
+    auto className = stmt.name.lexeme;
+    auto classInfo = &classMap_[className];
+
+    auto methods = stmt.methods;
+
+    // member variable need to be added outside of the class
+    // add using code like cls.a=1; and visit as well
+
+    // now suppport declare variable in class
+    for (auto member: stmt.members) {
+        auto fieldName = member->name.lexeme;
+        auto fieldType = excrateVarType(member->typeName);
+
+        classInfo->fieldsMap[fieldName] = fieldType;
+    }
+    for (auto method: methods) {
+        // method
+        auto methodName = method->functionName.lexeme;
+        auto fnName = className + "_" + methodName;
+        classInfo->methodsMap[methodName] = createFunctionProto(fnName, excrateFunType(method), env);
+    }
+
+    // create field
+    buildClassBody(cls);
+}
+
+// build class body
+void LoxVM::buildClassBody(llvm::StructType *cls) {
+    std::string className{cls->getName().data()};
+
+    auto classInfo = &classMap_[className];
+    auto clsFields = std::vector<llvm::Type *>{};
+    for (const auto &field: classInfo->fieldsMap) {
+        clsFields.push_back(field.second);
+    }
+
+    cls->setBody(clsFields, false);
+
+    // methods
 }
 
 llvm::FunctionType *LoxVM::excrateFunType(shared_ptr<Function> stmt) {
@@ -169,7 +220,8 @@ llvm::FunctionType *LoxVM::excrateFunType(shared_ptr<Function> stmt) {
     for (auto &param: params) {
         auto paramType = excrateVarType(param.second);
         // auto paramType = builder->getInt32Ty();
-        paramTypes.push_back(paramType);
+        auto paramName = param.first.lexeme;
+        paramTypes.push_back(paramName == "self" ? (llvm::Type *) cls->getPointerTo() : paramType);
     }
     return llvm::FunctionType::get(returnType, paramTypes, false);
     // return llvm::FunctionType::get(returnType, paramTypes, false);
@@ -363,7 +415,12 @@ void LoxVM::visitPrintStmt(const Print &stmt) {
 }
 
 void LoxVM::visitVarStmt(const Var &stmt) {
-
+    // special case for class fields,
+    // which are already defined in class info allocation
+    if (cls != nullptr) {
+        lastValue = builder->getInt32(0);
+        return;
+    }
     auto varName = stmt.name.lexeme;
     if (stmt.initializer != nullptr) {
         // auto varNameDecl = stmt.initializer;
@@ -385,7 +442,36 @@ void LoxVM::visitBlockStmt(const Block &stmt) {
     executeBlock(stmt.statements, env);
 }
 
-void LoxVM::visitClassStmt(const Class &stmt) {}
+void LoxVM::visitClassStmt(const Class &stmt) {
+    auto className = stmt.name.lexeme;
+    auto parent = stmt.superclass == nullptr ? nullptr : getClassByName(stmt.superclass->name.lexeme);
+
+    // compile class
+    cls = llvm::StructType::create(*ctx, className);
+    //! need to delete
+    module->getOrInsertGlobal(className, cls);
+    // super class data always sit at the beginning
+    if (parent != nullptr) {
+        inheritClass(cls, parent);
+    } else {
+        // add class info
+        classMap_[className] = {cls, parent, /*field*/ {}, /*method*/ {}};
+    }
+    // populate the class with fields and methods
+    buildClassInfo(cls, stmt, environment);
+
+    // compile the class body
+    for (auto method: stmt.methods) {
+        execute(method);
+    }
+
+
+    // reset class after compilation, so normal function does not pick the class name prefix
+    cls = nullptr;
+
+    lastValue = builder->getInt32(0);
+}
+
 void LoxVM::visitIfStmt(const If &stmt) {
     auto conditon = evaluate(stmt.main_branch.condition);
 

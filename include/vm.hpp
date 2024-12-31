@@ -18,6 +18,14 @@ using Env = std::shared_ptr<Environment>;
         return Object::make_llvmval_obj(val);         \
     } while (false)
 
+// class information
+struct ClassInfo {
+    llvm::StructType *cls;
+    llvm::StructType *parent;
+    std::map<std::string, llvm::Type *> fieldsMap;
+    std::map<std::string, llvm::Function *> methodsMap;
+};
+
 class LoxVM : public Visitor<Object>,
               public Visitor_Stmt,
               public std::enable_shared_from_this<LoxVM> {
@@ -55,10 +63,16 @@ private:
     llvm::Value *gen(vector<shared_ptr<Stmt>> &statements);                                             // generate IR
     llvm::BasicBlock *createBB(const std::string &name, llvm::Function *fn);                            // create a basic block
     void createFunctionBlock(llvm::Function *fn);                                                       // create a function block
-    llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);                                     // extract type from expression
-    llvm::Type *excrateVarType(const string &typeName);                                                 // extract type from string
-    bool hasReturnType(shared_ptr<Stmt> stmt);
-    llvm::FunctionType *excrateFunType(shared_ptr<Function> stmt);
+
+    llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);// extract type from expression
+    llvm::Type *excrateVarType(const string &typeName);            // extract type from string
+    bool hasReturnType(shared_ptr<Stmt> stmt);                     // check if a function has return type
+    llvm::FunctionType *excrateFunType(shared_ptr<Function> stmt); // extract function type
+
+    llvm::StructType *getClassByName(const std::string &name);             // get class by name
+    void inheritClass(llvm::StructType *cls, llvm::StructType *parent);    // inherit parent class field
+    void buildClassInfo(llvm::StructType *cls, const Class &stmt, Env env);// build class info
+    void buildClassBody(llvm::StructType *cls);                            // build class body
 
 
     static llvm::Value *lastValue;                 // last value generated
@@ -70,6 +84,8 @@ private:
     std::unique_ptr<llvm::Module> module;          // container for functions and global variables
     std::unique_ptr<llvm::IRBuilder<>> varsBuilder;// this builder always prepends to the beginning of the function entry block
     std::unique_ptr<llvm::IRBuilder<>> builder;    // enter at the end of the function entry block
+    llvm::StructType *cls = nullptr;               // current compiling class type
+    std::map<std::string, ClassInfo> classMap_;    // class map
 
     //runner functon
 

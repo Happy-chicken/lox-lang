@@ -187,14 +187,15 @@ public:
 
 class Class : public Stmt {
 public:
-    Class(Token name_, shared_ptr<Variable<Object>> superclass_, vector<shared_ptr<Function>> methods_)
-        : name(name_), superclass(superclass_), methods(methods_) { type = StmtType::Class; }
+    Class(Token name_, shared_ptr<Variable<Object>> superclass_, vector<shared_ptr<Function>> methods_, vector<shared_ptr<Var>> members_)
+        : name(name_), superclass(superclass_), methods(methods_), members(members_) { type = StmtType::Class; }
     void accept(shared_ptr<Visitor_Stmt> visitor) override {
         visitor->visitClassStmt(*this);
     }
     Token name;
     shared_ptr<Variable<Object>> superclass;
     vector<shared_ptr<Function>> methods;
+    vector<shared_ptr<Var>> members;
 };
 
 #endif// STMT_HPP_
