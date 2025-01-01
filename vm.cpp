@@ -172,24 +172,23 @@ void LoxVM::inheritClass(llvm::StructType *cls, llvm::StructType *parent) {}
 void LoxVM::buildClassInfo(llvm::StructType *cls, const Class &stmt, Env env) {
     auto className = stmt.name.lexeme;
     auto classInfo = &classMap_[className];
-
-    auto methods = stmt.methods;
-
     // member variable need to be added outside of the class
     // add using code like cls.a=1; and visit as well
 
     // now suppport declare variable in class
-    for (auto member: stmt.members) {
-        auto fieldName = member->name.lexeme;
-        auto fieldType = excrateVarType(member->typeName);
+    for (auto mem_met: stmt.body->statements) {
+        if (mem_met->type == StmtType::Function) {
+            auto method = std::dynamic_pointer_cast<Function>(mem_met);
+            auto methodName = method->functionName.lexeme;
+            auto fnName = className + "_" + methodName;
+            classInfo->methodsMap[methodName] = createFunctionProto(fnName, excrateFunType(method), env);
+        } else if (mem_met->type == StmtType::Var) {
+            auto member = std::dynamic_pointer_cast<Var>(mem_met);
+            auto fieldName = member->name.lexeme;
+            auto fieldType = excrateVarType(member->typeName);
 
-        classInfo->fieldsMap[fieldName] = fieldType;
-    }
-    for (auto method: methods) {
-        // method
-        auto methodName = method->functionName.lexeme;
-        auto fnName = className + "_" + methodName;
-        classInfo->methodsMap[methodName] = createFunctionProto(fnName, excrateFunType(method), env);
+            classInfo->fieldsMap[fieldName] = fieldType;
+        }
     }
 
     // create field
@@ -461,8 +460,18 @@ void LoxVM::visitClassStmt(const Class &stmt) {
     buildClassInfo(cls, stmt, environment);
 
     // compile the class body
-    for (auto method: stmt.methods) {
-        execute(method);
+    for (auto mem_met: stmt.body->statements) {
+        if (mem_met->type == StmtType::Function) {
+            auto method = std::dynamic_pointer_cast<Function>(mem_met);
+            method->functionName.lexeme = className + "_" + method->functionName.lexeme;
+            // rename the function to include class name
+            execute(method);
+
+
+        } else if (mem_met->type == StmtType::Var) {
+            auto member = std::dynamic_pointer_cast<Var>(mem_met);
+            execute(member);
+        }
     }
 
 

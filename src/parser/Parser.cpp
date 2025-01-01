@@ -116,16 +116,19 @@ shared_ptr<Stmt> Parser::classDeclaration() {
     consume(LEFT_BRACE, "Syntax Error. Expect '{' before class body.");
 
     vector<shared_ptr<Function>> methods;
-    vector<shared_ptr<Var>> members;
+    vector<shared_ptr<Stmt>> classStatements;
+
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
         if (match({VAR})) {
-            members.push_back(std::dynamic_pointer_cast<Var>(varDeclaration()));
+            classStatements.push_back(std::dynamic_pointer_cast<Var>(varDeclaration()));
         }
         methods.push_back(function("method"));
+        classStatements.push_back(methods.back());
     }
+    auto body = std::make_shared<Block>(classStatements);
     consume(RIGHT_BRACE, "Syntax Error. Expect '}' after class body.");
 
-    auto class_decl = std::make_shared<Class>(identifier, superclass, methods, members);
+    auto class_decl = std::make_shared<Class>(identifier, superclass, methods, body);
     return class_decl;
 }
 
