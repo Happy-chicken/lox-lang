@@ -327,7 +327,7 @@ Object Interpreter::visitIncrementExpr(shared_ptr<Increment<Object>> expr) {
     old_value.data = std::get<double>(old_value.data) + 1;
     // If the expression is a postfix increment, return the old value
     // otherwise return the new value.
-    return expr->type == Increment<Object>::Type::POSTFIX ? old_value : new_value;
+    return expr->m_type == Increment<Object>::Type::POSTFIX ? old_value : new_value;
 }
 
 Object Interpreter::visitDecrementExpr(shared_ptr<Decrement<Object>> expr) {
@@ -344,7 +344,7 @@ Object Interpreter::visitDecrementExpr(shared_ptr<Decrement<Object>> expr) {
     old_value.data = std::get<double>(old_value.data) + 1;
     // If the expression is a postfix increment, return the old value
     // otherwise return the new value.
-    return expr->type == Decrement<Object>::Type::POSTFIX ? old_value : new_value;
+    return expr->m_type == Decrement<Object>::Type::POSTFIX ? old_value : new_value;
 }
 
 /// @brief visit a list expression, define a list, like a =[]

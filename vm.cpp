@@ -123,6 +123,10 @@ void LoxVM::setupGlobalEnvironment() {
     globalEnv = std::make_shared<Environment>(nullptr, globalRecords);
 }
 
+void LoxVM::setupTargetTriple() {
+    module->setTargetTriple("x86_64-unknown-linux-gnu");
+}
+
 llvm::Type *LoxVM::excrateVarType(std::shared_ptr<Expr<Object>> expr) {
     if (std::dynamic_pointer_cast<Literal<Object>>(expr) != nullptr) {
         auto literal = std::dynamic_pointer_cast<Literal<Object>>(expr);
@@ -167,6 +171,33 @@ llvm::StructType *LoxVM::getClassByName(const std::string &name) {
     return llvm::StructType::getTypeByName(*ctx, name);
 }
 
+// create instance
+llvm::Value *LoxVM::createInstance(shared_ptr<Call<Object>> expr, Env env, const std::string &varName = "") {
+    string className = "";
+    if (expr->callee->type == ExprType::Variable) {
+        className = std::dynamic_pointer_cast<Variable<Object>>(expr->callee)->name.lexeme;
+    }
+
+    auto cls = getClassByName(className);
+
+    if (cls == nullptr) {
+        Error::ErrorLogMessage() << "[EvaVM]: Undefined class: " << cls;
+    }
+    // now it is stack allocation, TODO heap allocation
+    auto instance = varName.empty() ? builder->CreateAlloca(cls) : builder->CreateAlloca(cls, 0, varName);
+
+    // call constructor
+    auto ctor = module->getFunction(className + "_init");
+
+    std::vector<llvm::Value *> args{instance};
+
+    for (auto arg: expr->arguments) {
+        args.push_back(evaluate(arg));
+    }
+
+    builder->CreateCall(ctor, args);
+    return instance;
+}
 void LoxVM::inheritClass(llvm::StructType *cls, llvm::StructType *parent) {}
 
 void LoxVM::buildClassInfo(llvm::StructType *cls, const Class &stmt, Env env) {
@@ -181,6 +212,8 @@ void LoxVM::buildClassInfo(llvm::StructType *cls, const Class &stmt, Env env) {
             auto method = std::dynamic_pointer_cast<Function>(mem_met);
             auto methodName = method->functionName.lexeme;
             auto fnName = className + "_" + methodName;
+            // add 'this' as the first argument
+            method->params.insert(method->params.begin(), {Token(THIS, "this", Object::make_nil_obj(), 0), ""});
             classInfo->methodsMap[methodName] = createFunctionProto(fnName, excrateFunType(method), env);
         } else if (mem_met->type == StmtType::Var) {
             auto member = std::dynamic_pointer_cast<Var>(mem_met);
@@ -220,7 +253,7 @@ llvm::FunctionType *LoxVM::excrateFunType(shared_ptr<Function> stmt) {
         auto paramType = excrateVarType(param.second);
         // auto paramType = builder->getInt32Ty();
         auto paramName = param.first.lexeme;
-        paramTypes.push_back(paramName == "self" ? (llvm::Type *) cls->getPointerTo() : paramType);
+        paramTypes.push_back(paramName == "this" ? (llvm::Type *) cls->getPointerTo() : paramType);
     }
     return llvm::FunctionType::get(returnType, paramTypes, false);
     // return llvm::FunctionType::get(returnType, paramTypes, false);
@@ -422,18 +455,30 @@ void LoxVM::visitVarStmt(const Var &stmt) {
     }
     auto varName = stmt.name.lexeme;
     if (stmt.initializer != nullptr) {
-        // auto varNameDecl = stmt.initializer;
-        // auto env = globalEnv;
+
+        // we need to check if the variable is a class
+        // so that we can allocate the memory for it i.e. define it in the environment
+        if (stmt.initializer->type == ExprType::Call) {
+            auto call = std::dynamic_pointer_cast<Call<Object>>(stmt.initializer);
+            auto instance = createInstance(call, environment, varName);
+            lastValue = environment->define(varName, instance);
+            // evaluate(stmt.initializer);
+            Values.push_back(lastValue);
+            return;
+        }
         auto init = evaluate(stmt.initializer);
         auto varTy = excrateVarType(stmt.typeName);
         auto varBinding = allocVar(varName, varTy, environment);
         lastValue = builder->CreateStore(init, varBinding);
+        Values.push_back(lastValue);
+        return;
         // lastValue = createGlobalVariable(varName, (llvm::Constant *) init)->getInitializer();
     } else {
         // global variable without initializer to be assigned 0
         lastValue = createGlobalVariable(varName, builder->getInt32(0))->getInitializer();
+        Values.push_back(lastValue);
+        return;
     }
-    Values.push_back(lastValue);
 }
 
 void LoxVM::visitBlockStmt(const Block &stmt) {
@@ -448,7 +493,7 @@ void LoxVM::visitClassStmt(const Class &stmt) {
     // compile class
     cls = llvm::StructType::create(*ctx, className);
     //! need to delete
-    module->getOrInsertGlobal(className, cls);
+    // module->getOrInsertGlobal(className, cls);
     // super class data always sit at the beginning
     if (parent != nullptr) {
         inheritClass(cls, parent);

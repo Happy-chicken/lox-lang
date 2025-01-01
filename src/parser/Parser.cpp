@@ -84,7 +84,21 @@ shared_ptr<Function> Parser::function(string kind) {
             if (parameters.size() >= 255) {
                 error(peek(), "Syntax Error. Cannot have more than 255 parameters.");
             }
-            Token name = consume(IDENTIFIER, "Expect parameter name.");
+            // Token name = peek();// check first parameter is this
+            // if (name.type == THIS) {
+            //     advance();
+            //     if (kind == "function") {
+            //         error(name, "Syntax Error. 'this' is only allowed in methods.");
+            //     }
+            //     parameters.emplace_back(name, "");
+            //     continue;
+            // } else {// automatically add this parameter
+            //     if (kind == "method") {
+            //         Token thisToken = Token(THIS, "this", Object::make_nil_obj(), peek().line);
+            //         parameters.emplace_back(thisToken, "");
+            //     }
+            // }
+            Token name = consume(IDENTIFIER, "Expect non-keyword parameter name.");
             string typeName("");
             if (match({COLON})) {
                 typeName = consume(IDENTIFIER, "Expect parameter type.").lexeme;

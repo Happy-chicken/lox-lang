@@ -34,6 +34,7 @@ public:
         moduleInit();
         setupExternalFunctions();
         setupGlobalEnvironment();
+        setupTargetTriple();
     };
     ~LoxVM() = default;
 
@@ -56,6 +57,7 @@ private:
     void moduleInit();                                                                                  // init module and context
     void setupExternalFunctions();                                                                      // setup external functions
     void setupGlobalEnvironment();                                                                      // setup global environment
+    void setupTargetTriple();                                                                           // setup target triple
     llvm::Function *createFunction(const std::string &fnName, llvm::FunctionType *fnType, Env env);     // create a function
     llvm::Function *createFunctionProto(const std::string &fnName, llvm::FunctionType *fnType, Env env);// create a function prototype
     llvm::Value *allocVar(const std::string &name, llvm::Type *type, Env env);                          // allocate a variable
@@ -64,10 +66,11 @@ private:
     llvm::BasicBlock *createBB(const std::string &name, llvm::Function *fn);                            // create a basic block
     void createFunctionBlock(llvm::Function *fn);                                                       // create a function block
 
-    llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);// extract type from expression
-    llvm::Type *excrateVarType(const string &typeName);            // extract type from string
-    bool hasReturnType(shared_ptr<Stmt> stmt);                     // check if a function has return type
-    llvm::FunctionType *excrateFunType(shared_ptr<Function> stmt); // extract function type
+    llvm::Type *excrateVarType(std::shared_ptr<Expr<Object>> expr);                                 // extract type from expression
+    llvm::Type *excrateVarType(const string &typeName);                                             // extract type from string
+    bool hasReturnType(shared_ptr<Stmt> stmt);                                                      // check if a function has return type
+    llvm::FunctionType *excrateFunType(shared_ptr<Function> stmt);                                  // extract function type
+    llvm::Value *createInstance(shared_ptr<Call<Object>> expr, Env env, const std::string &varName);// create instance
 
     llvm::StructType *getClassByName(const std::string &name);             // get class by name
     void inheritClass(llvm::StructType *cls, llvm::StructType *parent);    // inherit parent class field

@@ -62,6 +62,25 @@ class This;
 template<class R>
 class Super;
 
+enum class ExprType {
+    Literal,
+    Assign,
+    Binary,
+    Grouping,
+    Unary,
+    Variable,
+    Logical,
+    Increment,
+    Decrement,
+    List,
+    Subscript,
+    Call,
+    Get,
+    Set,
+    This,
+    Super
+};
+
 template<class R>
 class Visitor {
 public:
@@ -92,13 +111,14 @@ class Expr {
 public:
     virtual R accept(shared_ptr<Visitor<R>> visitor) = 0;
     virtual ~Expr() = default;// for derived class
+    ExprType type;
 };
 
 template<class R>
 class Literal : public Expr<R>,
                 public std::enable_shared_from_this<Literal<R>> {
 public:
-    explicit Literal(R value_) : value(value_) {}
+    explicit Literal(R value_) : value(value_) { this->type = ExprType::Literal; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitLiteralExpr(this->shared_from_this());
     }
@@ -109,7 +129,7 @@ template<class R>
 class Assign : public Expr<R>, public std::enable_shared_from_this<Assign<R>> {
 public:
     Assign(Token name_, shared_ptr<Expr<R>> value_)
-        : name(name_), value(value_) {}
+        : name(name_), value(value_) { this->type = ExprType::Assign; }
 
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitAssignExpr(this->shared_from_this());
@@ -122,7 +142,7 @@ template<class R>
 class Binary : public Expr<R>, public std::enable_shared_from_this<Binary<R>> {
 public:
     Binary(shared_ptr<Expr<R>> left_, Token operation, shared_ptr<Expr<R>> right_)
-        : left(left_), operation(operation), right(right_) {}
+        : left(left_), operation(operation), right(right_) { this->type = ExprType::Binary; }
 
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitBinaryExpr(this->shared_from_this());
@@ -137,7 +157,7 @@ class Grouping : public Expr<R>,
                  public std::enable_shared_from_this<Grouping<R>> {
 public:
     explicit Grouping(shared_ptr<Expr<R>> expression_)
-        : expression(expression_) {}
+        : expression(expression_) { this->type = ExprType::Grouping; }
 
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitGroupingExpr(this->shared_from_this());
@@ -149,7 +169,7 @@ template<class R>
 class Unary : public Expr<R>, public std::enable_shared_from_this<Unary<R>> {
 public:
     Unary(Token operation, shared_ptr<Expr<R>> right_)
-        : operation(operation), right(right_) {}
+        : operation(operation), right(right_) { this->type = ExprType::Unary; }
 
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitUnaryExpr(this->shared_from_this());
@@ -165,13 +185,13 @@ public:
     typedef enum { POSTFIX,
                    PREFIX } Type;
     Increment(Token identifier_, Type type_)
-        : identifier(identifier_), type(type_) {}
+        : identifier(identifier_), m_type(type_) { this->type = ExprType::Increment; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitIncrementExpr(this->shared_from_this());
     }
 
     Token identifier;
-    Type type;
+    Type m_type;
 };
 
 template<class R>
@@ -181,19 +201,19 @@ public:
     typedef enum { POSTFIX,
                    PREFIX } Type;
     Decrement(Token identifier_, Type type_)
-        : identifier(identifier_), type(type_) {}
+        : identifier(identifier_), m_type(type_) { this->type = ExprType::Decrement; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitDecrementExpr(this->shared_from_this());
     }
     Token identifier;
-    Type type;
+    Type m_type;
 };
 
 template<class R>
 class Variable : public Expr<R>,
                  public std::enable_shared_from_this<Variable<R>> {
 public:
-    explicit Variable(Token name_) : name(name_) {}
+    explicit Variable(Token name_) : name(name_) { this->type = ExprType::Variable; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitVariableExpr(this->shared_from_this());
     };
@@ -205,7 +225,7 @@ class Logical : public Expr<R>,
                 public std::enable_shared_from_this<Logical<R>> {
 public:
     Logical(shared_ptr<Expr<R>> left_, Token operation_, shared_ptr<Expr<R>> right_)
-        : left(left_), operation(operation_), right(right_) {}
+        : left(left_), operation(operation_), right(right_) { this->type = ExprType::Logical; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitLogicalExpr(this->shared_from_this());
     }
@@ -221,7 +241,7 @@ public:
     vector<shared_ptr<Expr<R>>> items;
 
     List(Token opening_bracket_, vector<shared_ptr<Expr<R>>> items_)
-        : opening_bracket(opening_bracket_), items(items_) {}
+        : opening_bracket(opening_bracket_), items(items_) { this->type = ExprType::List; }
 
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitListExpr(this->shared_from_this());
@@ -237,7 +257,7 @@ public:
     shared_ptr<Expr<R>> value;
 
     Subscript(Token identifier_, shared_ptr<Expr<R>> index_, shared_ptr<Expr<R>> value_)
-        : identifier(identifier_), index(index_), value(value_) {}
+        : identifier(identifier_), index(index_), value(value_) { this->type = ExprType::Subscript; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitSubscriptExpr(this->shared_from_this());
     }
@@ -247,7 +267,7 @@ template<class R>
 class Call : public Expr<R>, public std::enable_shared_from_this<Call<R>> {
 public:
     Call(shared_ptr<Expr<R>> callee_, Token paren_, vector<shared_ptr<Expr<R>>> arguments_)
-        : callee(callee_), paren(paren_), arguments(arguments_) {}
+        : callee(callee_), paren(paren_), arguments(arguments_) { this->type = ExprType::Call; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitCallExpr(this->shared_from_this());
     }
@@ -260,7 +280,7 @@ template<class R>
 class Get : public Expr<R>, public std::enable_shared_from_this<Get<R>> {
 public:
     Get(shared_ptr<Expr<R>> object_, Token name_)
-        : object(object_), name(name_) {}
+        : object(object_), name(name_) { this->type = ExprType::Get; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitGetExpr(this->shared_from_this());
     }
@@ -272,7 +292,7 @@ template<class R>
 class Set : public Expr<R>, public std::enable_shared_from_this<Set<R>> {
 public:
     Set(shared_ptr<Expr<R>> object_, Token name_, shared_ptr<Expr<R>> value_)
-        : object(object_), name(name_), value(value_) {}
+        : object(object_), name(name_), value(value_) { this->type = ExprType::Set; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitSetExpr(this->shared_from_this());
     }
@@ -284,7 +304,7 @@ public:
 template<class R>
 class This : public Expr<R>, public std::enable_shared_from_this<This<R>> {
 public:
-    explicit This(Token keyword_) : keyword(keyword_) {}
+    explicit This(Token keyword_) : keyword(keyword_) { this->type = ExprType::This; }
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitThisExpr(this->shared_from_this());
     }
@@ -294,7 +314,7 @@ public:
 template<class R>
 class Super : public Expr<R>, public std::enable_shared_from_this<Super<R>> {
 public:
-    Super(Token keyword_, Token method_) : keyword(keyword_), method(method_){};
+    Super(Token keyword_, Token method_) : keyword(keyword_), method(method_) { this->type = ExprType::Super; };
     R accept(shared_ptr<Visitor<R>> visitor) override {
         return visitor->visitSuperExpr(this->shared_from_this());
     };
